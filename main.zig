@@ -118,15 +118,19 @@ pub fn encode(self: Base64, allocator: std.mem.Allocator, input: []const u8) ![]
 }
 
 pub fn main() !void {
-    const b64: Base64 = Base64.init();
+    const stdin = std.io.getStdIn().reader();
+    const stdout = std.io.getStdOut().writer();
 
-    var memory_buffer: [1024]u8 = undefined;
+    var read_buffer: [1024]u8 = undefined;
+    var memory_buffer: [4096]u8 = undefined;
+
     var fba = std.heap.FixedBufferAllocator.init(&memory_buffer);
     const allocator = fba.allocator();
+    const b64: Base64 = Base64.init();
 
-    const input = [_]u8{ 'a', 'b', 'c' };
+    const input = try stdin.readUntilDelimiter(&read_buffer, '\n');
 
-    const code = try encode(b64, allocator, &input);
+    const code = try encode(b64, allocator, input);
 
-    std.debug.print("{s}", .{code});
+    try stdout.print("{s}\n", .{code});
 }
