@@ -118,19 +118,43 @@ pub fn encode(self: Base64, allocator: std.mem.Allocator, input: []const u8) ![]
 }
 
 pub fn main() !void {
-    const stdin = std.io.getStdIn().reader();
+    // const stdin = std.io.getStdIn().reader();
     const stdout = std.io.getStdOut().writer();
 
-    var read_buffer: [1024]u8 = undefined;
-    var memory_buffer: [4096]u8 = undefined;
+    if (std.os.argv.len == 2) {} else if (std.os.argv.len == 3) {
+        if (std.mem.eql(u8, std.mem.span(std.os.argv[1]), "-es")) {
+            try stdout.print("Sorry, so file/url safe mode yet.\n", .{});
+        } else if (std.mem.eql(u8, std.mem.span(std.os.argv[1]), "-d")) {
+            try stdout.print("Sorry, no decoding yet\n", .{});
+        } else if (std.mem.eql(u8, std.mem.span(std.os.argv[1]), "-e")) {
+            var memory_buffer: [4096]u8 = undefined;
+            var fba = std.heap.FixedBufferAllocator.init(&memory_buffer);
+            const allocator = fba.allocator();
+            const b64: Base64 = Base64.init();
+            const input = std.mem.span(std.os.argv[1]);
+            const code = try encode(b64, allocator, input);
+            try stdout.print("{s}\n", .{code});
+        } else {
+            try print_usage(stdout);
+        }
+    } else {
+        try print_usage(stdout);
+    }
+}
 
-    var fba = std.heap.FixedBufferAllocator.init(&memory_buffer);
-    const allocator = fba.allocator();
-    const b64: Base64 = Base64.init();
-
-    const input = try stdin.readUntilDelimiter(&read_buffer, '\n');
-
-    const code = try encode(b64, allocator, input);
-
-    try stdout.print("{s}\n", .{code});
+pub fn print_usage(stdout: anytype) !void {
+    try stdout.print(
+        \\
+        \\Usage:
+        \\    base64 -e <string>
+        \\        non url/file safe base-64 encoding of <string>
+        \\
+        \\    base64 -es <string>
+        \\        url/file safe base-64 encoding of <string>
+        \\
+        \\    base64 -d <string>
+        \\        decode string
+        \\
+        \\
+    , .{});
 }
