@@ -2,20 +2,35 @@ const std = @import("std");
 
 const Base64 = struct {
     /// lookup table
-    _table: *const [64]u8,
+    _encode_table: *const [64]u8,
+    _decode_table: *const [256]u8,
 
     pub fn init() Base64 {
         const first26 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
         const second26 = "abcdefghijklmnopqrstuvwxyz";
         const last12 = "0123456789+/";
+        const encode_table = first26 ++ second26 ++ last12;
+
+        const decode_table = comptime block: {
+            var table = [_]u8{255} ** 256;
+            for (encode_table, 0..) |ch, i| {
+                table[ch] = i;
+            }
+            break :block table;
+        };
 
         return Base64{
-            ._table = first26 ++ second26 ++ last12,
+            ._encode_table = encode_table,
+            ._decode_table = &decode_table,
         };
     }
 
     pub fn _char_at(self: Base64, index: usize) u8 {
-        return self._table[index];
+        return self._encode_table[index];
+    }
+
+    pub fn _value_at(self: Base64, ch: u8) u8 {
+        return self._decode_table[ch];
     }
 };
 
@@ -25,7 +40,8 @@ pub fn _calc_encode_length(input: []const u8) !usize {
 
 pub fn _calc_decode_length(input: []const u8) !usize {
     var decode_len: usize = if (input.len < 3) 4 else try std.math.divFloor(usize, input.len, 4) * 3;
-    for (input.len..0) |i| {
+    var i: usize = input.len - 1;
+    while (i > 0) : (i -= 1) {
         if (input[i] == '=') {
             decode_len -= 1;
         } else {
@@ -113,7 +129,83 @@ pub fn encode(self: Base64, allocator: std.mem.Allocator, input: []const u8) ![]
         code[code_idx + 2] = '=';
         code[code_idx + 3] = '=';
     }
+    return code;
+}
 
+pub fn decode(self: Base64, allocator: std.mem.Allocator, input: []const u8) ![]const u8 {
+    // todo notify of malformed input
+    //  (a) length%4 != 0 == malformed
+
+    if (input.len == 0) {
+        return "";
+    }
+
+    const size: usize = try _calc_decode_length(input);
+    var bf = [_]u8{0} ** 4;
+    var bf_idx: u8 = 0;
+    var code: []u8 = try allocator.alloc(u8, size);
+    var code_idx: usize = 0;
+
+    const chars = blk: {
+        var len = input.len;
+        var i = input.len - 1;
+        while (i > 0) : (i -= 1) {
+            if (input[i] == '=') {
+                len -= 1;
+            } else {
+                break;
+            }
+        }
+        break :blk len;
+    };
+
+    var byte: u8 = undefined;
+
+    for (0..chars) |i| {
+        bf[bf_idx] = self._value_at(input[i]);
+        bf_idx += 1;
+
+        if (bf_idx == 4) { // once the buffer is full
+            // turn 4 bytes into 3
+
+            // first byte
+            // concatenate(last 6 of bf[0], first 2 of bf[1])
+            byte = (bf[0] << 2) + (bf[1] >> 4);
+            code[code_idx + 0] = byte;
+
+            // second byte
+            // concatenate(last 4 of bf[1], first 4 of bf[2])
+            byte = (bf[1] << 4) + (bf[2] >> 2);
+            code[code_idx + 1] = byte;
+
+            // third byte
+            // concatenate(last 2 of bf[2], first 6 of bf[3])
+            byte = (bf[2] << 6) + bf[3];
+            code[code_idx + 2] = byte;
+
+            bf_idx = 0;
+            code_idx += 3;
+        }
+    }
+
+    if (bf_idx == 3) {
+        // first byte
+        // concatenate(last 6 of bf[0], first 2 of bf[1])
+        byte = (bf[0] << 2) + (bf[1] >> 4);
+        code[code_idx + 0] = byte;
+
+        // second byte
+        // concatenate(last 4 of bf[1], first 4 of bf[2])
+        byte = (bf[1] << 4) + (bf[2] >> 2);
+        code[code_idx + 1] = byte;
+    }
+
+    if (bf_idx == 2) {
+        // first byte
+        // concatenate(last 6 of bf[0], first 2 of bf[1])
+        byte = (bf[0] << 2) + (bf[1] >> 4);
+        code[code_idx + 0] = byte;
+    }
     return code;
 }
 
@@ -127,7 +219,13 @@ pub fn main() !void {
         if (std.mem.eql(u8, std.mem.span(std.os.argv[1]), "-es")) {
             try stdout.print("Sorry, so file/url safe mode yet.\n", .{});
         } else if (std.mem.eql(u8, std.mem.span(std.os.argv[1]), "-d")) {
-            try stdout.print("Sorry, no decoding yet\n", .{});
+            var memory_buffer: [4096]u8 = undefined;
+            var fba = std.heap.FixedBufferAllocator.init(&memory_buffer);
+            const allocator = fba.allocator();
+            const b64: Base64 = Base64.init();
+            const input = std.mem.span(std.os.argv[2]);
+            const code = try decode(b64, allocator, input);
+            try stdout.print("{s}\n", .{code});
         } else if (std.mem.eql(u8, std.mem.span(std.os.argv[1]), "-e")) {
             var memory_buffer: [4096]u8 = undefined;
             var fba = std.heap.FixedBufferAllocator.init(&memory_buffer);

@@ -1,12 +1,17 @@
-A fun little project to learn a little about [Zig](https://github.com/ziglang/zig).
+## base64
 
-A command line tool for base64 encoding.
+A command line tool for base-64 data encoding.
+
+A fun little project to learn a little about [Zig](https://github.com/ziglang/zig).
 
 ### Features
 
 - [x] encoding
-- [ ] decoding
+- [x] decoding
 - [ ] file/url safe mode
+- [ ] file i/o
+
+Possibly, maybe, perhaps, expand to include base-16,32.
 
 ### Resources:
 
