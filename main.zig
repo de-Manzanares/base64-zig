@@ -121,7 +121,9 @@ pub fn main() !void {
     // const stdin = std.io.getStdIn().reader();
     const stdout = std.io.getStdOut().writer();
 
-    if (std.os.argv.len == 2) {} else if (std.os.argv.len == 3) {
+    if (std.os.argv.len == 2) {
+        try print_usage(stdout);
+    } else if (std.os.argv.len == 3) {
         if (std.mem.eql(u8, std.mem.span(std.os.argv[1]), "-es")) {
             try stdout.print("Sorry, so file/url safe mode yet.\n", .{});
         } else if (std.mem.eql(u8, std.mem.span(std.os.argv[1]), "-d")) {
@@ -131,7 +133,7 @@ pub fn main() !void {
             var fba = std.heap.FixedBufferAllocator.init(&memory_buffer);
             const allocator = fba.allocator();
             const b64: Base64 = Base64.init();
-            const input = std.mem.span(std.os.argv[1]);
+            const input = std.mem.span(std.os.argv[2]);
             const code = try encode(b64, allocator, input);
             try stdout.print("{s}\n", .{code});
         } else {
@@ -147,7 +149,7 @@ pub fn print_usage(stdout: anytype) !void {
         \\
         \\Usage:
         \\    base64 -e <string>
-        \\        non url/file safe base-64 encoding of <string>
+        \\        base-64 encoding of <string>
         \\
         \\    base64 -es <string>
         \\        url/file safe base-64 encoding of <string>
